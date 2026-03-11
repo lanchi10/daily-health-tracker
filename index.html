@@ -411,6 +411,9 @@ svg text { font-family: 'Heebo',sans-serif; }
 // CONSTANTS & DEFAULTS
 // ═══════════════════════════════════════════
 
+const APP_VERSION   = 'v1.0 | 12-03-2026';
+const DEPLOY_TARGET = 'Netlify primary';
+
 const KEY_ENTRIES = 'daily_tracker_entries';
 const KEY_GOALS   = 'daily_tracker_goals';
 
@@ -1098,6 +1101,9 @@ function init() {
   // Set form date to today
   document.getElementById('f-date').value = todayISO();
 
+  // Update document title with version
+  document.title = 'Daily Tracker ' + APP_VERSION;
+
   // Set header
   const now = new Date();
   document.getElementById('hdr-date').textContent =
@@ -1116,6 +1122,23 @@ function init() {
 }
 
 init();
+</script>
+
+<div style="
+  text-align: center;
+  padding: 18px 0 6px;
+  font-size: 0.72rem;
+  color: #475569;
+  line-height: 1.8;
+  font-family: 'Heebo', sans-serif;
+">
+  <div>Daily Tracker <span id="footer-version"></span></div>
+  <div id="footer-deploy"></div>
+</div>
+
+<script>
+  document.getElementById('footer-version').textContent = APP_VERSION;
+  document.getElementById('footer-deploy').textContent  = DEPLOY_TARGET;
 </script>
 </body>
 </html>
