@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
@@ -214,6 +215,7 @@ svg text { font-family: 'Heebo',sans-serif; }
   .gform  { grid-template-columns: 1fr; }
 }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -399,6 +401,11 @@ svg text { font-family: 'Heebo',sans-serif; }
       <p>ייבא 10 רשומות ממרץ 2026.<br>
          רשומות קיימות לאותם תאריכים לא יידרסו.</p>
       <button class="btn-sm b-import" onclick="importHistoricalData(true)">טען נתונים היסטוריים</button>
+      <button class="btn-sm b-import" style="margin-top:8px;" onclick="restoreFromBackupData()">שחזר מגיבוי</button>
+      <input type="file" id="xl-file-input" accept=".xlsx,.xls" style="display:none"
+             onchange="importFromExcel(this.files[0]); this.value='';">
+      <button class="btn-sm b-import" style="margin-top:8px;"
+              onclick="document.getElementById('xl-file-input').click()">ייבוא מקובץ Excel</button>
     </div>
     <div id="import-flash" class="flash" style="margin-top:8px;"></div>
   </div>
@@ -411,11 +418,11 @@ svg text { font-family: 'Heebo',sans-serif; }
 // CONSTANTS & DEFAULTS
 // ═══════════════════════════════════════════
 
-const APP_VERSION   = 'v1.0 | 12-03-2026';
-const DEPLOY_TARGET = 'Netlify primary';
-
 const KEY_ENTRIES = 'daily_tracker_entries';
 const KEY_GOALS   = 'daily_tracker_goals';
+
+const APP_VERSION   = "v1.0 | 12-03-2026";
+const DEPLOY_TARGET = "Netlify primary";
 
 const GOAL_DEFAULTS = {
   targetWeight: 75,
@@ -438,6 +445,23 @@ const HISTORICAL_DATA = [
   { date:'2026-03-09', weight:80.20, steps:11000, followedRules:'כן', calories:1520, protein:145 },
   { date:'2026-03-10', weight:null,  steps:10000, followedRules:'כן', calories:1343, protein:107 },
   { date:'2026-03-11', weight:80.00, steps:15000, followedRules:'כן', calories:1412, protein:139 },
+];
+
+// ═══════════════════════════════════════════
+// BACKUP DATA (DD/MM/YYYY — converted on restore)
+// Blank weight_kg → null. Blank followed_rules → null.
+// ═══════════════════════════════════════════
+const BACKUP_DATA_RAW = [
+  { date:'11/03/2026', weight_kg:'80',   steps:15000, followed_rules:'',   calories:1425, protein_g:139 },
+  { date:'10/03/2026', weight_kg:'',     steps:10000, followed_rules:'כן', calories:1343, protein_g:107 },
+  { date:'09/03/2026', weight_kg:'80.2', steps:11000, followed_rules:'כן', calories:1520, protein_g:145 },
+  { date:'08/03/2026', weight_kg:'',     steps:11000, followed_rules:'כן', calories:1450, protein_g:162 },
+  { date:'07/03/2026', weight_kg:'',     steps:12000, followed_rules:'כן', calories:1146, protein_g:138 },
+  { date:'06/03/2026', weight_kg:'80.6', steps:13000, followed_rules:'כן', calories:1850, protein_g:192 },
+  { date:'05/03/2026', weight_kg:'80.9', steps:12000, followed_rules:'כן', calories:1550, protein_g:154 },
+  { date:'04/03/2026', weight_kg:'',     steps:14000, followed_rules:'כן', calories:1400, protein_g:155 },
+  { date:'03/03/2026', weight_kg:'',     steps:12000, followed_rules:'לא', calories:1980, protein_g:130 },
+  { date:'02/03/2026', weight_kg:'80.8', steps:12000, followed_rules:'כן', calories:1570, protein_g:130 },
 ];
 
 // ═══════════════════════════════════════════
@@ -1094,6 +1118,113 @@ function importHistoricalData(showConfirm) {
 }
 
 // ═══════════════════════════════════════════
+// SHARED MERGE HELPER
+// Parses one row (from BACKUP_DATA_RAW or Excel), maps column names to
+// internal field names, and merges safely into the entries array.
+// Returns: 'added' | 'completed' | 'skipped' | 'invalid'
+// ═══════════════════════════════════════════
+function _mergeOneRow(row, entries) {
+  // Normalize date: handle DD/MM/YYYY string or Excel serial number
+  let rawDate = row.date;
+  if (typeof rawDate === 'number') {
+    const d = new Date(Math.round((rawDate - 25569) * 86400 * 1000));
+    rawDate = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  }
+  rawDate = String(rawDate || '').trim();
+  const isoDate = rawDate.includes('/') ? displayToISO(rawDate) : rawDate;
+  if (!isoDate.match(/^\d{4}-\d{2}-\d{2}$/)) return 'invalid';
+
+  // Parse + map: weight_kg→weight, followed_rules→followedRules, protein_g→protein
+  const wk = row.weight_kg;
+  const bkWeight        = (wk != null && wk !== '')              ? parseFloat(wk)          : null;
+  const bkSteps         = (row.steps    != null && row.steps    !== '') ? Number(row.steps)    : null;
+  const bkFollowedRules = (row.followed_rules === 'כן' || row.followed_rules === 'לא')
+                          ? row.followed_rules : null;
+  const bkCalories      = (row.calories != null && row.calories !== '') ? Number(row.calories) : null;
+  const bkProtein       = (row.protein_g != null && row.protein_g !== '') ? Number(row.protein_g) : null;
+
+  const existing = entries.find(e => e.date === isoDate);
+  if (!existing) {
+    entries.push({ date: isoDate, weight: bkWeight, steps: bkSteps,
+                   followedRules: bkFollowedRules, calories: bkCalories,
+                   protein: bkProtein, note: null });
+    return 'added';
+  }
+  // Fill only null/empty fields — never overwrite, never touch note
+  let filled = false;
+  const fill = (field, bkVal) => {
+    if ((existing[field] === null || existing[field] === undefined || existing[field] === '')
+        && bkVal !== null) {
+      existing[field] = bkVal; filled = true;
+    }
+  };
+  fill('weight', bkWeight); fill('steps', bkSteps); fill('followedRules', bkFollowedRules);
+  fill('calories', bkCalories); fill('protein', bkProtein);
+  return filled ? 'completed' : 'skipped';
+}
+
+// ═══════════════════════════════════════════
+// EXCEL IMPORT
+// Reads .xlsx/.xls, parses first worksheet, merges via _mergeOneRow().
+// ═══════════════════════════════════════════
+function importFromExcel(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      const ws = wb.Sheets['Data_Import'] || wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      const entries = loadEntries();
+      let added = 0, completed = 0, skipped = 0, invalid = 0;
+      rows.forEach(row => {
+        const r = _mergeOneRow(row, entries);
+        if      (r === 'added')     added++;
+        else if (r === 'completed') completed++;
+        else if (r === 'skipped')   skipped++;
+        else                        invalid++;
+      });
+      entries.sort((a, b) => b.date.localeCompare(a.date));
+      persistEntries(entries);
+      renderSummaryPage(); renderHistoryPage();
+      let msg = `נוספו ${added} שורות חדשות • הושלמו ${completed} שורות קיימות • ${skipped} ללא שינוי`;
+      if (invalid > 0) msg += ` • ${invalid} שורות לא תקינות`;
+      showFlash('import-flash', msg, (added + completed) > 0 ? 'ok' : 'err');
+    } catch (err) {
+      showFlash('import-flash', 'שגיאה בקריאת הקובץ: ' + err.message, 'err');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ═══════════════════════════════════════════
+// RESTORE FROM BACKUP
+// Merges BACKUP_DATA_RAW into localStorage:
+//   - missing date → insert full row
+//   - existing date → fill only null/empty fields
+//   - never overwrites existing non-empty values
+//   - never fills note from backup
+// ═══════════════════════════════════════════
+function restoreFromBackupData() {
+  const entries = loadEntries();
+  let added = 0, completed = 0, skipped = 0;
+
+  BACKUP_DATA_RAW.forEach(row => {
+    const r = _mergeOneRow(row, entries);
+    if      (r === 'added')     added++;
+    else if (r === 'completed') completed++;
+    else if (r === 'skipped')   skipped++;
+  });
+
+  entries.sort((a, b) => b.date.localeCompare(a.date));
+  persistEntries(entries);
+  renderSummaryPage(); renderHistoryPage();
+
+  const msg = `נוספו ${added} שורות חדשות • הושלמו ${completed} שורות קיימות • ${skipped} שורות ללא שינוי`;
+  showFlash('import-flash', msg, (added + completed) > 0 ? 'ok' : 'err');
+}
+
+// ═══════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════
 
@@ -1101,14 +1232,12 @@ function init() {
   // Set form date to today
   document.getElementById('f-date').value = todayISO();
 
-  // Update document title with version
-  document.title = 'Daily Tracker ' + APP_VERSION;
-
   // Set header
   const now = new Date();
   document.getElementById('hdr-date').textContent =
     'יום ' + hebrewDayName() + ', ' +
     now.getDate() + '/' + (now.getMonth() + 1) + '/' + now.getFullYear();
+  document.title = "Daily Tracker " + APP_VERSION;
 
   // Migrate existing entries (handles old boolean followedRules, missing fields, etc.)
   const entries = loadEntries();
@@ -1123,22 +1252,13 @@ function init() {
 
 init();
 </script>
-
-<div style="
-  text-align: center;
-  padding: 18px 0 6px;
-  font-size: 0.72rem;
-  color: #475569;
-  line-height: 1.8;
-  font-family: 'Heebo', sans-serif;
-">
-  <div>Daily Tracker <span id="footer-version"></span></div>
-  <div id="footer-deploy"></div>
-</div>
-
+<footer style="text-align:center;padding:18px 0 10px;font-size:11px;color:#555;letter-spacing:.04em;">
+  Daily Tracker <span id="ft-ver"></span><br>
+  <span id="ft-deploy"></span>
+</footer>
 <script>
-  document.getElementById('footer-version').textContent = APP_VERSION;
-  document.getElementById('footer-deploy').textContent  = DEPLOY_TARGET;
+  document.getElementById('ft-ver').textContent    = APP_VERSION;
+  document.getElementById('ft-deploy').textContent = DEPLOY_TARGET;
 </script>
 </body>
 </html>
