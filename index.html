@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head>
@@ -138,12 +137,14 @@ body {
 /* ── KPI GRID ── */
 .kpi2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
 .kpi3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 13px; }
+.kpi4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 13px; }
 .kpi  {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 12px; padding: 13px 10px; text-align: center;
 }
 .kv    { font-size: 1.6rem; font-weight: 900; line-height: 1; margin-bottom: 3px; }
 .kv-sm { font-size: 1.25rem; font-weight: 900; line-height: 1; margin-bottom: 3px; }
+.kv-xs { font-size: 1.05rem; font-weight: 900; line-height: 1; margin-bottom: 3px; }
 .kn    { font-size: 0.66rem; color: var(--muted); }
 .ks    { font-size: 0.66rem; font-weight: 600; margin-top: 4px; }
 
@@ -212,9 +213,10 @@ svg text { font-family: 'Heebo',sans-serif; }
 .empty { text-align: center; color: var(--muted); padding: 22px; font-size: 0.84rem; }
 
 @media (max-width: 400px) {
-  .kv { font-size: 1.3rem; } .kv-sm { font-size: 1.05rem; }
+  .kv { font-size: 1.3rem; } .kv-sm { font-size: 1.05rem; } .kv-xs { font-size: 0.9rem; }
   .wgrid4 { grid-template-columns: 1fr 1fr; }
   .gform  { grid-template-columns: 1fr; }
+  .kpi4   { grid-template-columns: 1fr 1fr; }
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
@@ -277,6 +279,11 @@ svg text { font-family: 'Heebo',sans-serif; }
       </div>
     </div>
 
+    <div class="field">
+      <label>נתרן <span class="opt">(מ"ג)</span></label>
+      <input type="number" id="f-sodium" step="50" min="0" max="10000" placeholder="2000">
+    </div>
+
     <div class="opt-section">
       <div class="opt-title">הערה <span class="opt">(אופציונלי)</span></div>
       <div class="field">
@@ -308,20 +315,25 @@ svg text { font-family: 'Heebo',sans-serif; }
     </div>
   </div>
 
-  <!-- Row 2: Protein + Calories + Weekly adherence -->
-  <div class="kpi3">
+  <!-- Row 2: Protein + Calories + Sodium + Rules -->
+  <div class="kpi4">
     <div class="kpi">
-      <div class="kv-sm cp" id="kpi-protein">—</div>
+      <div class="kv-xs cp" id="kpi-protein">—</div>
       <div class="kn">חלבון גרם</div>
       <div class="ks" id="kpi-protein-s"></div>
     </div>
     <div class="kpi">
-      <div class="kv-sm cg" id="kpi-calories">—</div>
+      <div class="kv-xs cg" id="kpi-calories">—</div>
       <div class="kn">קלוריות</div>
       <div class="ks" id="kpi-calories-s"></div>
     </div>
     <div class="kpi">
-      <div class="kv-sm" id="kpi-rules-today">—</div>
+      <div class="kv-xs cr" id="kpi-sodium">—</div>
+      <div class="kn">נתרן מ"ג</div>
+      <div class="ks" id="kpi-sodium-s"></div>
+    </div>
+    <div class="kpi">
+      <div class="kv-xs" id="kpi-rules-today">—</div>
       <div class="kn">חוקים</div>
       <div class="ks cm" id="kpi-rules-week"></div>
     </div>
@@ -385,6 +397,10 @@ svg text { font-family: 'Heebo',sans-serif; }
         <input type="number" id="g-calories" step="50" min="0" max="10000">
       </div>
       <div class="field">
+        <label>מגבלת נתרן <span class="opt">(מ"ג)</span></label>
+        <input type="number" id="g-sodium" step="100" min="0" max="10000">
+      </div>
+      <div class="field">
         <label>יעד צעדים מינימום</label>
         <input type="number" id="g-steps-min" step="500" min="0" max="50000">
       </div>
@@ -423,7 +439,7 @@ svg text { font-family: 'Heebo',sans-serif; }
 const KEY_ENTRIES = 'daily_tracker_entries';
 const KEY_GOALS   = 'daily_tracker_goals';
 
-const APP_VERSION   = "v1.0 | 12-03-2026";
+const APP_VERSION   = "v1.1 | 14-03-2026";
 const DEPLOY_TARGET = "Netlify primary";
 
 const GOAL_DEFAULTS = {
@@ -431,39 +447,39 @@ const GOAL_DEFAULTS = {
   startWeight:  89,
   proteinGoal:  130,
   calorieLimit: 1800,
+  sodiumLimit:  2300,
   stepGoalMin:  10000,
   stepGoalMax:  12000,
 };
 
 // Stored with ISO dates. followedRules is "כן" | "לא" | null.
 const HISTORICAL_DATA = [
-  { date:'2026-03-02', weight:80.80, steps:12000, followedRules:'כן', calories:1570, protein:130 },
-  { date:'2026-03-03', weight:null,  steps:12000, followedRules:'לא', calories:1980, protein:130 },
-  { date:'2026-03-04', weight:null,  steps:14000, followedRules:'כן', calories:1400, protein:155 },
-  { date:'2026-03-05', weight:80.90, steps:12000, followedRules:'כן', calories:1550, protein:154 },
-  { date:'2026-03-06', weight:80.60, steps:13000, followedRules:'כן', calories:1850, protein:192 },
-  { date:'2026-03-07', weight:null,  steps:12000, followedRules:'כן', calories:1146, protein:138 },
-  { date:'2026-03-08', weight:null,  steps:11000, followedRules:'כן', calories:1450, protein:162 },
-  { date:'2026-03-09', weight:80.20, steps:11000, followedRules:'כן', calories:1520, protein:145 },
-  { date:'2026-03-10', weight:null,  steps:10000, followedRules:'כן', calories:1343, protein:107 },
-  { date:'2026-03-11', weight:80.00, steps:15000, followedRules:'כן', calories:1412, protein:139 },
+  { date:'2026-03-02', weight:80.80, steps:12000, followedRules:'כן', calories:1570, protein:130, sodium:null },
+  { date:'2026-03-03', weight:null,  steps:12000, followedRules:'לא', calories:1980, protein:130, sodium:null },
+  { date:'2026-03-04', weight:null,  steps:14000, followedRules:'כן', calories:1400, protein:155, sodium:null },
+  { date:'2026-03-05', weight:80.90, steps:12000, followedRules:'כן', calories:1550, protein:154, sodium:null },
+  { date:'2026-03-06', weight:80.60, steps:13000, followedRules:'כן', calories:1850, protein:192, sodium:null },
+  { date:'2026-03-07', weight:null,  steps:12000, followedRules:'כן', calories:1146, protein:138, sodium:null },
+  { date:'2026-03-08', weight:null,  steps:11000, followedRules:'כן', calories:1450, protein:162, sodium:null },
+  { date:'2026-03-09', weight:80.20, steps:11000, followedRules:'כן', calories:1520, protein:145, sodium:null },
+  { date:'2026-03-10', weight:null,  steps:10000, followedRules:'כן', calories:1343, protein:107, sodium:null },
+  { date:'2026-03-11', weight:80.00, steps:15000, followedRules:'כן', calories:1412, protein:139, sodium:null },
 ];
 
 // ═══════════════════════════════════════════
 // BACKUP DATA (DD/MM/YYYY — converted on restore)
-// Blank weight_kg → null. Blank followed_rules → null.
 // ═══════════════════════════════════════════
 const BACKUP_DATA_RAW = [
-  { date:'11/03/2026', weight_kg:'80',   steps:15000, followed_rules:'',   calories:1425, protein_g:139 },
-  { date:'10/03/2026', weight_kg:'',     steps:10000, followed_rules:'כן', calories:1343, protein_g:107 },
-  { date:'09/03/2026', weight_kg:'80.2', steps:11000, followed_rules:'כן', calories:1520, protein_g:145 },
-  { date:'08/03/2026', weight_kg:'',     steps:11000, followed_rules:'כן', calories:1450, protein_g:162 },
-  { date:'07/03/2026', weight_kg:'',     steps:12000, followed_rules:'כן', calories:1146, protein_g:138 },
-  { date:'06/03/2026', weight_kg:'80.6', steps:13000, followed_rules:'כן', calories:1850, protein_g:192 },
-  { date:'05/03/2026', weight_kg:'80.9', steps:12000, followed_rules:'כן', calories:1550, protein_g:154 },
-  { date:'04/03/2026', weight_kg:'',     steps:14000, followed_rules:'כן', calories:1400, protein_g:155 },
-  { date:'03/03/2026', weight_kg:'',     steps:12000, followed_rules:'לא', calories:1980, protein_g:130 },
-  { date:'02/03/2026', weight_kg:'80.8', steps:12000, followed_rules:'כן', calories:1570, protein_g:130 },
+  { date:'11/03/2026', weight_kg:'80',   steps:15000, followed_rules:'',   calories:1425, protein_g:139, sodium_mg:'' },
+  { date:'10/03/2026', weight_kg:'',     steps:10000, followed_rules:'כן', calories:1343, protein_g:107, sodium_mg:'' },
+  { date:'09/03/2026', weight_kg:'80.2', steps:11000, followed_rules:'כן', calories:1520, protein_g:145, sodium_mg:'' },
+  { date:'08/03/2026', weight_kg:'',     steps:11000, followed_rules:'כן', calories:1450, protein_g:162, sodium_mg:'' },
+  { date:'07/03/2026', weight_kg:'',     steps:12000, followed_rules:'כן', calories:1146, protein_g:138, sodium_mg:'' },
+  { date:'06/03/2026', weight_kg:'80.6', steps:13000, followed_rules:'כן', calories:1850, protein_g:192, sodium_mg:'' },
+  { date:'05/03/2026', weight_kg:'80.9', steps:12000, followed_rules:'כן', calories:1550, protein_g:154, sodium_mg:'' },
+  { date:'04/03/2026', weight_kg:'',     steps:14000, followed_rules:'כן', calories:1400, protein_g:155, sodium_mg:'' },
+  { date:'03/03/2026', weight_kg:'',     steps:12000, followed_rules:'לא', calories:1980, protein_g:130, sodium_mg:'' },
+  { date:'02/03/2026', weight_kg:'80.8', steps:12000, followed_rules:'כן', calories:1570, protein_g:130, sodium_mg:'' },
 ];
 
 // ═══════════════════════════════════════════
@@ -493,7 +509,6 @@ function persistGoals(goals) {
 
 // ═══════════════════════════════════════════
 // MIGRATION
-// Run once on init to upgrade old localStorage records.
 // ═══════════════════════════════════════════
 
 function migrateEntries(entries) {
@@ -506,7 +521,8 @@ function migrateEntries(entries) {
 
     // 2. Ensure new fields exist (old records may not have them)
     if (!Object.prototype.hasOwnProperty.call(e, 'steps'))        { e.steps        = null; changed = true; }
-    if (!Object.prototype.hasOwnProperty.call(e, 'followedRules'))  { e.followedRules  = null; changed = true; }
+    if (!Object.prototype.hasOwnProperty.call(e, 'followedRules')) { e.followedRules = null; changed = true; }
+    if (!Object.prototype.hasOwnProperty.call(e, 'sodium'))        { e.sodium        = null; changed = true; }
 
     // 3. Ensure weight is null (not 0) when blank
     if (e.weight === 0) { e.weight = null; changed = true; }
@@ -622,23 +638,23 @@ function setRules(val) {
 
 function saveEntry() {
   const date     = document.getElementById('f-date').value;
-  // Parse as null when blank — never coerce to 0
   const weight   = document.getElementById('f-weight').value   !== '' ? parseFloat(document.getElementById('f-weight').value)   : null;
   const steps    = document.getElementById('f-steps').value    !== '' ? parseInt(document.getElementById('f-steps').value)      : null;
   const calories = document.getElementById('f-calories').value !== '' ? parseInt(document.getElementById('f-calories').value)   : null;
   const protein  = document.getElementById('f-protein').value  !== '' ? parseFloat(document.getElementById('f-protein').value)  : null;
+  const sodium   = document.getElementById('f-sodium').value   !== '' ? parseInt(document.getElementById('f-sodium').value)     : null;
   const note     = document.getElementById('f-note').value.trim() || null;
 
   if (!date) {
     showFlash('log-flash', 'בחר תאריך', 'err');
     return;
   }
-  if (weight == null && steps == null && calories == null && protein == null && currentRules === null) {
+  if (weight == null && steps == null && calories == null && protein == null && sodium == null && currentRules === null) {
     showFlash('log-flash', 'הכנס לפחות ערך אחד', 'err');
     return;
   }
 
-  const entry = { date, weight, steps, followedRules: currentRules, calories, protein, note };
+  const entry = { date, weight, steps, followedRules: currentRules, calories, protein, sodium, note };
 
   const entries = loadEntries();
   const idx     = entries.findIndex(e => e.date === date);
@@ -663,6 +679,7 @@ function startEditEntry(date) {
   document.getElementById('f-steps').value    = entry.steps    ?? '';
   document.getElementById('f-calories').value = entry.calories ?? '';
   document.getElementById('f-protein').value  = entry.protein  ?? '';
+  document.getElementById('f-sodium').value   = entry.sodium   ?? '';
   document.getElementById('f-note').value     = entry.note     ?? '';
   setRules(entry.followedRules ?? null);
 
@@ -686,6 +703,7 @@ function cancelEdit() {
   document.getElementById('f-steps').value    = '';
   document.getElementById('f-calories').value = '';
   document.getElementById('f-protein').value  = '';
+  document.getElementById('f-sodium').value   = '';
   document.getElementById('f-note').value     = '';
   setRules(null);
 }
@@ -702,8 +720,6 @@ function showFlash(id, msg, type) {
 // SUMMARY PAGE
 // ═══════════════════════════════════════════
 
-// Re-renders all data-dependent views after a save/edit.
-// Called at the end of saveEntry() so data is always fresh.
 function refreshAllViews() {
   renderSummaryPage();
   renderHistoryPage();
@@ -715,7 +731,6 @@ function renderSummaryPage() {
   const today      = todayISO();
   const todayEntry = findEntry(entries, today);
   const prevWeight = findPrevWeightEntry(entries, today);
-  // Ascending copy needed for MA computations
   const asc        = [...entries].sort((a, b) => a.date.localeCompare(b.date));
 
   renderKPICards(todayEntry, prevWeight, goals, asc, today);
@@ -774,15 +789,27 @@ function renderKPICards(todayE, prevWeightE, goals, asc, today) {
     setKpiSub('kpi-calories-s', 'לא הוזן', 'cm');
   }
 
+  // Sodium
+  const na = todayE?.sodium ?? null;
+  setKpiText('kpi-sodium', na != null ? na.toLocaleString() : '—');
+  if (na != null) {
+    const pct = Math.round(na / goals.sodiumLimit * 100);
+    if      (pct > 110) setKpiSub('kpi-sodium-s', 'חריגה!', 'cr');
+    else if (pct > 100) setKpiSub('kpi-sodium-s', 'גבול (' + pct + '%)', 'cg');
+    else                setKpiSub('kpi-sodium-s', 'בטווח (' + pct + '%)', 'cgr');
+  } else {
+    setKpiSub('kpi-sodium-s', 'לא הוזן', 'cm');
+  }
+
   // Rules – today + weekly count
   const r       = todayE?.followedRules ?? null;
   const weekAll = getLastNDaysEntries(loadEntries(), 7);
   const rHit    = weekAll.filter(e => e.followedRules === 'כן').length;
   const rLog    = weekAll.filter(e => e.followedRules != null).length;
   const rulesEl = document.getElementById('kpi-rules-today');
-  if      (r === 'כן') { rulesEl.textContent = 'כן'; rulesEl.className = 'kv-sm cgr'; }
-  else if (r === 'לא') { rulesEl.textContent = 'לא'; rulesEl.className = 'kv-sm cr';  }
-  else                 { rulesEl.textContent = '—';  rulesEl.className = 'kv-sm cm';  }
+  if      (r === 'כן') { rulesEl.textContent = 'כן'; rulesEl.className = 'kv-xs cgr'; }
+  else if (r === 'לא') { rulesEl.textContent = 'לא'; rulesEl.className = 'kv-xs cr';  }
+  else                 { rulesEl.textContent = '—';  rulesEl.className = 'kv-xs cm';  }
   setKpiSub('kpi-rules-week', rLog ? rHit + '/' + rLog + ' שבוע' : '', 'cm');
 }
 
@@ -802,9 +829,10 @@ function renderTodayProgress(todayE, goals) {
   if (!todayE) { el.innerHTML = '<div class="empty">אין רשומה להיום</div>'; return; }
 
   let html = '';
-  if (todayE.steps    != null) html += buildProgBar('צעדים',   todayE.steps,    goals.stepGoalMin, 'var(--cyan)',   '',     false);
-  if (todayE.protein  != null) html += buildProgBar('חלבון',   todayE.protein,  goals.proteinGoal, 'var(--purple)', 'ג',    false);
-  if (todayE.calories != null) html += buildProgBar('קלוריות', todayE.calories, goals.calorieLimit,'var(--gold)',   'kcal', true);
+  if (todayE.steps    != null) html += buildProgBar('צעדים',   todayE.steps,    goals.stepGoalMin, 'var(--cyan)',   '',      false);
+  if (todayE.protein  != null) html += buildProgBar('חלבון',   todayE.protein,  goals.proteinGoal, 'var(--purple)', 'ג',     false);
+  if (todayE.calories != null) html += buildProgBar('קלוריות', todayE.calories, goals.calorieLimit,'var(--gold)',   'kcal',  true);
+  if (todayE.sodium   != null) html += buildProgBar('נתרן',    todayE.sodium,   goals.sodiumLimit,  'var(--red)',   'מ"ג',   true);
 
   el.innerHTML = html || '<div class="empty">אין נתונים להצגה</div>';
 }
@@ -925,20 +953,23 @@ function renderWeeklySummary(entries, goals) {
     return;
   }
 
-  const withW = week.filter(e => e.weight   != null);
-  const withS = week.filter(e => e.steps    != null);
-  const withC = week.filter(e => e.calories != null);
-  const withP = week.filter(e => e.protein  != null);
+  const withW  = week.filter(e => e.weight   != null);
+  const withS  = week.filter(e => e.steps    != null);
+  const withC  = week.filter(e => e.calories != null);
+  const withP  = week.filter(e => e.protein  != null);
+  const withNa = week.filter(e => e.sodium   != null);
 
-  const avgW = avg(withW.map(e => e.weight));
-  const avgS = avg(withS.map(e => e.steps));
-  const avgC = avg(withC.map(e => e.calories));
-  const avgP = avg(withP.map(e => e.protein));
+  const avgW  = avg(withW.map(e => e.weight));
+  const avgS  = avg(withS.map(e => e.steps));
+  const avgC  = avg(withC.map(e => e.calories));
+  const avgP  = avg(withP.map(e => e.protein));
+  const avgNa = avg(withNa.map(e => e.sodium));
 
   const stepsHit   = withS.filter(e => e.steps   >= goals.stepGoalMin).length;
   const rulesHit   = week.filter(e => e.followedRules === 'כן').length;
   const rulesLog   = week.filter(e => e.followedRules  != null).length;
   const calOver    = withC.filter(e => e.calories > goals.calorieLimit * 1.05).length;
+  const naOver     = withNa.filter(e => e.sodium  > goals.sodiumLimit  * 1.05).length;
   const proteinHit = withP.filter(e => e.protein  >= goals.proteinGoal).length;
 
   el.innerHTML = `
@@ -948,11 +979,17 @@ function renderWeeklySummary(entries, goals) {
       <div><div class="wval cg">${avgC != null ? Math.round(avgC).toLocaleString() : '—'}</div><div class="wlbl">קלוריות ממוצע</div></div>
       <div><div class="wval cp">${avgP != null ? Math.round(avgP) : '—'}</div><div class="wlbl">חלבון ממוצע</div></div>
     </div>
+    ${avgNa != null ? `<div style="text-align:center;margin-bottom:10px;font-size:0.8rem;color:var(--muted);">
+      ממוצע נתרן 7 ימים:
+      <b style="color:${avgNa <= goals.sodiumLimit ? 'var(--green)' : 'var(--red)'};font-size:1rem;margin-right:4px;">${Math.round(avgNa).toLocaleString()} מ"ג</b>
+      <span style="font-size:0.72rem;">(${avgNa <= goals.sodiumLimit ? Math.round(avgNa / goals.sodiumLimit * 100) + '% מהמגבלה' : '+' + Math.round(avgNa - goals.sodiumLimit) + ' מהמגבלה'})</span>
+    </div>` : ''}
     <div class="wbadges">
       ${withS.length  ? `<span>צעדים ✓: <b style="color:${stepsHit===withS.length?'var(--green)':'var(--gold)'}">${stepsHit}/${withS.length}</b></span>` : ''}
       ${rulesLog      ? `<span>חוקים ✓: <b style="color:${rulesHit===rulesLog?'var(--green)':'var(--gold)'}">${rulesHit}/${rulesLog}</b></span>` : ''}
       ${withP.length  ? `<span>חלבון ✓: <b style="color:${proteinHit===withP.length?'var(--green)':'var(--gold)'}">${proteinHit}/${withP.length}</b></span>` : ''}
       ${withC.length  ? `<span>קלוריות חריגה: <b style="color:${calOver===0?'var(--green)':'var(--red)'}">${calOver}/${withC.length}</b></span>` : ''}
+      ${withNa.length ? `<span>נתרן חריגה: <b style="color:${naOver===0?'var(--green)':'var(--red)'}">${naOver}/${withNa.length}</b></span>` : ''}
     </div>
     ${avgC != null ? `<div style="text-align:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:0.8rem;color:var(--muted);">
       ממוצע קלוריות 7 ימים:
@@ -999,6 +1036,10 @@ function buildEntryCard(e, goals) {
     const r = e.calories / goals.calorieLimit;
     badges += `<span class="badge ${r<=1?'bok':r<=1.1?'bwrn':'bbad'}">${r<=1?'✓':r<=1.1?'~':'✗'} קלוריות</span>`;
   }
+  if (e.sodium != null) {
+    const r = e.sodium / goals.sodiumLimit;
+    badges += `<span class="badge ${r<=1?'bok':r<=1.1?'bwrn':'bbad'}">${r<=1?'✓':r<=1.1?'~':'✗'} נתרן</span>`;
+  }
 
   // Metric pills
   const pills = [
@@ -1006,6 +1047,7 @@ function buildEntryCard(e, goals) {
     e.steps    != null ? `<div class="mpill"><div class="mv cc">${e.steps.toLocaleString()}</div><div class="ml">צעדים</div></div>` : '',
     e.protein  != null ? `<div class="mpill"><div class="mv cp">${e.protein}ג</div><div class="ml">חלבון</div></div>` : '',
     e.calories != null ? `<div class="mpill"><div class="mv cg">${e.calories.toLocaleString()}</div><div class="ml">kcal</div></div>` : '',
+    e.sodium   != null ? `<div class="mpill"><div class="mv cr">${e.sodium.toLocaleString()}</div><div class="ml">נתרן מ"ג</div></div>` : '',
   ].filter(Boolean).join('');
 
   return `<div class="entry">
@@ -1040,6 +1082,7 @@ function populateGoalsForm() {
   document.getElementById('g-start-wt').value  = g.startWeight;
   document.getElementById('g-protein').value   = g.proteinGoal;
   document.getElementById('g-calories').value  = g.calorieLimit;
+  document.getElementById('g-sodium').value    = g.sodiumLimit;
   document.getElementById('g-steps-min').value = g.stepGoalMin;
   document.getElementById('g-steps-max').value = g.stepGoalMax;
 }
@@ -1050,6 +1093,7 @@ function saveGoals() {
     startWeight:  parseFloat(document.getElementById('g-start-wt').value)  || 89,
     proteinGoal:  parseFloat(document.getElementById('g-protein').value)   || 130,
     calorieLimit: parseFloat(document.getElementById('g-calories').value)  || 1800,
+    sodiumLimit:  parseFloat(document.getElementById('g-sodium').value)    || 2300,
     stepGoalMin:  parseInt(document.getElementById('g-steps-min').value)   || 10000,
     stepGoalMax:  parseInt(document.getElementById('g-steps-max').value)   || 12000,
   });
@@ -1065,7 +1109,7 @@ function exportCSV() {
   if (!entries.length) { alert('אין נתונים לייצוא'); return; }
 
   const BOM    = '\uFEFF';
-  const header = 'date,weight_kg,steps,followed_rules,calories,protein_g';
+  const header = 'date,weight_kg,steps,followed_rules,calories,protein_g,sodium_mg';
   const rows   = entries.map(e => [
     isoToDisplay(e.date),        // DD/MM/YYYY
     e.weight         ?? '',
@@ -1073,6 +1117,7 @@ function exportCSV() {
     e.followedRules  ?? '',
     e.calories       ?? '',
     e.protein        ?? '',
+    e.sodium         ?? '',
   ].join(','));
 
   const blob = new Blob([BOM + header + '\n' + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
@@ -1121,9 +1166,6 @@ function importHistoricalData(showConfirm) {
 
 // ═══════════════════════════════════════════
 // SHARED MERGE HELPER
-// Parses one row (from BACKUP_DATA_RAW or Excel), maps column names to
-// internal field names, and merges safely into the entries array.
-// Returns: 'added' | 'completed' | 'skipped' | 'invalid'
 // ═══════════════════════════════════════════
 function _mergeOneRow(row, entries) {
   // Normalize date: handle DD/MM/YYYY string or Excel serial number
@@ -1136,20 +1178,20 @@ function _mergeOneRow(row, entries) {
   const isoDate = rawDate.includes('/') ? displayToISO(rawDate) : rawDate;
   if (!isoDate.match(/^\d{4}-\d{2}-\d{2}$/)) return 'invalid';
 
-  // Parse + map: weight_kg→weight, followed_rules→followedRules, protein_g→protein
   const wk = row.weight_kg;
-  const bkWeight        = (wk != null && wk !== '')              ? parseFloat(wk)          : null;
-  const bkSteps         = (row.steps    != null && row.steps    !== '') ? Number(row.steps)    : null;
+  const bkWeight        = (wk != null && wk !== '')                     ? parseFloat(wk)           : null;
+  const bkSteps         = (row.steps     != null && row.steps     !== '') ? Number(row.steps)        : null;
   const bkFollowedRules = (row.followed_rules === 'כן' || row.followed_rules === 'לא')
                           ? row.followed_rules : null;
-  const bkCalories      = (row.calories != null && row.calories !== '') ? Number(row.calories) : null;
-  const bkProtein       = (row.protein_g != null && row.protein_g !== '') ? Number(row.protein_g) : null;
+  const bkCalories      = (row.calories  != null && row.calories  !== '') ? Number(row.calories)    : null;
+  const bkProtein       = (row.protein_g != null && row.protein_g !== '') ? Number(row.protein_g)   : null;
+  const bkSodium        = (row.sodium_mg != null && row.sodium_mg !== '') ? Number(row.sodium_mg)   : null;
 
   const existing = entries.find(e => e.date === isoDate);
   if (!existing) {
     entries.push({ date: isoDate, weight: bkWeight, steps: bkSteps,
                    followedRules: bkFollowedRules, calories: bkCalories,
-                   protein: bkProtein, note: null });
+                   protein: bkProtein, sodium: bkSodium, note: null });
     return 'added';
   }
   // Fill only null/empty fields — never overwrite, never touch note
@@ -1161,13 +1203,12 @@ function _mergeOneRow(row, entries) {
     }
   };
   fill('weight', bkWeight); fill('steps', bkSteps); fill('followedRules', bkFollowedRules);
-  fill('calories', bkCalories); fill('protein', bkProtein);
+  fill('calories', bkCalories); fill('protein', bkProtein); fill('sodium', bkSodium);
   return filled ? 'completed' : 'skipped';
 }
 
 // ═══════════════════════════════════════════
 // EXCEL IMPORT
-// Reads .xlsx/.xls, parses first worksheet, merges via _mergeOneRow().
 // ═══════════════════════════════════════════
 function importFromExcel(file) {
   if (!file) return;
@@ -1201,11 +1242,6 @@ function importFromExcel(file) {
 
 // ═══════════════════════════════════════════
 // RESTORE FROM BACKUP
-// Merges BACKUP_DATA_RAW into localStorage:
-//   - missing date → insert full row
-//   - existing date → fill only null/empty fields
-//   - never overwrites existing non-empty values
-//   - never fills note from backup
 // ═══════════════════════════════════════════
 function restoreFromBackupData() {
   const entries = loadEntries();
